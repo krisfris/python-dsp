@@ -65,12 +65,13 @@ class Waveform(pg.PlotItem):
 
         super().__init__(title='Waveform', axisItems=dict(bottom=xaxis, left=yaxis))
 
+        self.traces = self.plot(pen='c', width=3)
+
         self.settings.interval_changed.connect(self.setup)
         self.setup()
 
     def setup(self):
         self.x = np.arange(0, self.framesize * self.settings.chunksize, 2)
-        self.traces = self.plot(pen='c', width=3)
         self.setYRange(0, 255, padding=0)
         self.setXRange(0, 2 * self.settings.chunksize, padding=0.005)
 
@@ -113,11 +114,11 @@ class Spectrogram(pg.PlotItem):
         super().__init__(title='Spectrum')
 
         self.settings.interval_changed.connect(self.setup)
+        self.traces = self.plot(pen='m', width=3)
         self.setup()
 
     def setup(self):
         self.x = np.linspace(0, self.settings.rate / 2, self.settings.chunksize // 2)
-        self.traces = self.plot(pen='m', width=3)
         self.setLogMode(x=False, y=True)
         self.setYRange(-4, 0, padding=0)
         #self.setXRange(np.log10(20), np.log10(self.rate / 2), padding=0.005)
@@ -136,13 +137,13 @@ class Spectrogram2(pg.PlotItem):
         super().__init__(title='Spectrum2')
         self.settings = settings
         self.settings.interval_changed.connect(self.setup)
-        self.setup()
 
-    def setup(self):
         self.img = pg.ImageItem()
         self.addItem(self.img)
 
+        self.setup()
 
+    def setup(self):
         self.img_array = np.zeros((1000, self.settings.chunksize//2+1))
 
         # bipolar colormap
