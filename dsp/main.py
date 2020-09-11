@@ -1,5 +1,6 @@
 import struct
 import pyaudio
+import os
 import sys
 import time
 import wave
@@ -32,6 +33,9 @@ class Microphone:
                                   # input_device_index=self.find_input_device(),
                                   frames_per_buffer=frames_per_buffer)
 
+    def get_sample_size(self):
+        return self.p.get_sample_size(self.format)
+
     def read(self, frames=None):
         if frames is None:
             frames = self.frames_per_buffer
@@ -57,9 +61,19 @@ class Recorder:
 
     def reset(self):
         self.data = []
+        self.recording = False
+
+    def is_recording(self):
+        return self.recording
+
+    def record(self):
+        self.recording = True
+
+    def stop(self):
+        self.recording = False
 
     def add_frames(self, data):
-        self.data.extend(data)
+        self.data.append(data)
 
 
 class Waveform(pg.PlotItem):
@@ -267,7 +281,6 @@ class GraphicsWidget(pg.GraphicsLayoutWidget):
         super().__init__()
 
         self.settings = settings
-        self.settings.interval_changed.connect(self.update_interval)
 
         self.mic = mic
         self.traces = dict()
@@ -285,19 +298,7 @@ class GraphicsWidget(pg.GraphicsLayoutWidget):
         for i, plot in enumerate(self.plots):
             self.addItem(plot, row=i, col=1)
 
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update)
-        self.update_interval(self.settings.interval)
-        self.timer.start()
-
-    def update_interval(self, value):
-        self.timer.setInterval(int(1000 * value))  # QTimer expects ms
-
-    def stop(self):
-        self.timer.stop()
-
-    def update(self):
-        data = self.mic.read(self.settings.chunksize)
+    def update(self, data):
         for plot in self.plots:
             plot.update(data)
 
@@ -392,7 +393,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(config.app_name)
         self.settings = Settings()
         self.mic = Microphone(rate=self.settings.rate, channels=self.settings.channels)
+        self.recorder = Recorder()
         self.setup_ui()
+        self.setup_timer()
 
     def setup_ui(self):
         splitter = QSplitter()
@@ -447,6 +450,25 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(open_action)
         self.toolbar.addAction(save_action)
 
+    def setup_timer(self):
+        self.settings.interval_changed.connect(self.update_interval)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update)
+        self.update_interval(self.settings.interval)
+        self.timer.start()
+
+    def update_interval(self, value):
+        self.timer.setInterval(int(1000 * value))  # QTimer expects ms
+
+    def stop(self):
+        self.timer.stop()
+
+    def update(self):
+        data = self.mic.read(self.settings.chunksize)
+        self.graphics_widget.update(data)
+        if self.recorder.is_recording():
+            self.recorder.add_frames(data)
+
     def createPopupMenu(self):
         menu = super().createPopupMenu()
         menu.addSeparator()
@@ -462,19 +484,37 @@ class MainWindow(QMainWindow):
         pass
 
     def record_triggered(self):
-        pass
+        if not self.recorder.is_recording():
+            self.recorder.reset()
+            self.recorder.record()
 
     def stop_triggered(self):
-        pass
+        if self.recorder.is_recording():
+            self.recorder.stop()
 
     def save_triggered(self):
-        pass
+        if self.recorder.is_recording():
+            QMessageBox.critical(self, 'Stop recording first', 'You must stop recording before saving.')
+            return
+        if not self.recorder.data:
+            QMessageBox.critical(self, 'No data to save', 'You must record some data before saving.')
+            return
+        directory = QSettings().value('default-audio-dir') or ''
+        filename, filetype = QFileDialog.getSaveFileName(self, 'Save Audio', directory,
+                                                         'Wave File (*.wav)')
+        if filename:
+            QSettings().setValue('default-audio-dir', os.path.dirname(filename))
+            with wave.open(filename, 'wb') as f:
+                f.setnchannels(self.settings.channels)
+                f.setsampwidth(self.mic.get_sample_size())
+                f.setframerate(self.settings.rate)
+                f.writeframes(b''.join(self.recorder.data))
 
     def open_triggered(self):
         pass
 
     def closeEvent(self, event):
-        self.graphics_widget.stop()
+        self.stop()
         self.mic.close()
         super().closeEvent(event)
 
