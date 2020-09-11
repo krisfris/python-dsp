@@ -2,6 +2,7 @@ import struct
 import pyaudio
 import sys
 import time
+import wave
 
 import numpy as np
 from scipy.fftpack import fft
@@ -15,7 +16,7 @@ import dsp
 from dsp.qt import *
 
 
-class MicrophoneRecorder:
+class Microphone:
     def __init__(self, rate=44100, channels=1, frames_per_buffer=1024, format=pyaudio.paInt16):
         self.rate = rate
         self.channels = channels
@@ -48,6 +49,17 @@ class MicrophoneRecorder:
         self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()
+
+
+class Recorder:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.data = []
+
+    def add_frames(self, data):
+        self.data.extend(data)
 
 
 class Waveform(pg.PlotItem):
@@ -379,7 +391,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(config.app_name)
         self.settings = Settings()
-        self.mic = MicrophoneRecorder(rate=self.settings.rate, channels=self.settings.channels)
+        self.mic = Microphone(rate=self.settings.rate, channels=self.settings.channels)
         self.setup_ui()
 
     def setup_ui(self):
@@ -410,6 +422,56 @@ class MainWindow(QMainWindow):
 
         help_menu = self.menu.addMenu('&Help')
         help_menu.addAction(about_action)
+
+        live_action = QAction(QIcon('pics/live.png'), 'live', self)
+        live_action.triggered.connect(self.live_triggered)
+
+        record_action = QAction(QIcon('pics/record.png'), 'record', self)
+        record_action.triggered.connect(self.record_triggered)
+
+        save_action = QAction(QIcon('pics/save.png'), 'save', self)
+        save_action.triggered.connect(self.save_triggered)
+
+        open_action = QAction(QIcon('pics/open.png'), 'open', self)
+        open_action.triggered.connect(self.open_triggered)
+
+        stop_action = QAction(QIcon('pics/stop.png'), 'stop', self)
+        stop_action.triggered.connect(self.stop_triggered)
+
+        self.toolbar = self.addToolBar('Control')
+        self.toolbar.setMovable(QSettings().value('control-toolbar-movable', type=bool) or False)
+        self.toolbar.addAction(live_action)
+        self.toolbar.addAction(record_action)
+        self.toolbar.addAction(stop_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(open_action)
+        self.toolbar.addAction(save_action)
+
+    def createPopupMenu(self):
+        menu = super().createPopupMenu()
+        menu.addSeparator()
+        menu.addAction('Toggle fixed', self.toggle_toolbar_fixed)
+        return menu
+
+    def toggle_toolbar_fixed(self):
+        v = not self.toolbar.isMovable()
+        QSettings().setValue('control-toolbar-movable', v)
+        self.toolbar.setMovable(v)
+
+    def live_triggered(self):
+        pass
+
+    def record_triggered(self):
+        pass
+
+    def stop_triggered(self):
+        pass
+
+    def save_triggered(self):
+        pass
+
+    def open_triggered(self):
+        pass
 
     def closeEvent(self, event):
         self.graphics_widget.stop()
